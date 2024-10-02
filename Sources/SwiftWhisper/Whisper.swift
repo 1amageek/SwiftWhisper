@@ -202,7 +202,6 @@ public class Whisper: @unchecked Sendable {
             // Check if the model is available locally
             if localModels.contains(model) && !redownload {
                 // Get local model folder URL from localModels
-                // TODO: Make this configurable in the UI
                 folder = URL(fileURLWithPath: localModelPath).appendingPathComponent(model)
             } else {
                 // Download the model
