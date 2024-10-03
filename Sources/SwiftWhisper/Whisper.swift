@@ -433,13 +433,13 @@ public class Whisper: @unchecked Sendable {
                 }
 #endif
                 
-                try? audioProcessor.startRecordingLive(inputDeviceID: deviceId) { _ in
-                    DispatchQueue.main.async {
+                await MainActor.run {
+                    try? audioProcessor.startRecordingLive(inputDeviceID: deviceId) { _ in
                         self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
                         self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
                     }
                 }
-                
+ 
                 // Delay the timer start by 1 second
                 isRecording = true
                 isTranscribing = true
