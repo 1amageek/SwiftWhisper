@@ -434,10 +434,10 @@ public class Whisper: @unchecked Sendable {
 #endif
                 do {
                     try audioProcessor.startRecordingLive(inputDeviceID: deviceId) { buffer in
-                        Task { @MainActor in
-                            self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
-                            self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
-                        }
+//                        Task { @MainActor in
+//                            self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
+//                            self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
+//                        }
                     }
                 } catch {
                     print("Error starting recording: \(error)")
