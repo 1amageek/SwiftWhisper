@@ -28,7 +28,7 @@ public class Whisper: @unchecked Sendable {
     var currentText: String = ""
     var currentChunks: [Int: (chunkText: [String], fallbacks: Int)] = [:]
     var modelStorage: String = "huggingface/models/argmaxinc/whisperkit-coreml"
-
+    
     
     // MARK: Model management
     
@@ -127,7 +127,7 @@ public class Whisper: @unchecked Sendable {
     }
     
     // MARK: - Logic
-        
+    
     private var loadSubject = PassthroughSubject<Progress, Never>()
     private var loadTask: Task<Void, Never>?
     
@@ -243,7 +243,7 @@ public class Whisper: @unchecked Sendable {
                             let downloadProgress = Progress(totalUnitCount: 100)
                             folder = try await WhisperKit.download(variant: model, from: repoName) { @Sendable in
                                 downloadProgress.completedUnitCount = $0.completedUnitCount
-                            }                            
+                            }
                             // ダウンロード完了後にメインアクターで進捗を更新
                             await MainActor.run {
                                 progress.completedUnitCount = 30
@@ -260,14 +260,42 @@ public class Whisper: @unchecked Sendable {
                     
                     self.whisperKit?.modelFolder = modelFolder
                     
-                    // 以下、モデルのプリウォーミングとロードの処理は変更なし
-                    // ...
-
-                } catch {
+                    // モデルのプリウォーミング
                     await MainActor.run {
-                        print("Error in loadModel: \(error.localizedDescription)")
-                        continuation.finish()
+                        self.modelState = .prewarming
                     }
+                    
+                    progress.completedUnitCount = 40
+                    continuation.yield(progress)
+                    
+                    try await self.whisperKit?.prewarmModels()
+                    
+                    progress.completedUnitCount = 60
+                    continuation.yield(progress)
+                    
+                    // モデルのロード
+                    await MainActor.run {
+                        self.modelState = .loading
+                    }
+                    
+                    try await self.whisperKit?.loadModels()
+                    
+                    // 完了後の処理
+                    await MainActor.run {
+                        if !self.localModels.contains(model) {
+                            self.localModels.append(model)
+                        }
+                        self.availableLanguages = Constants.languages.map { $0.key }.sorted()
+                        self.modelState = self.whisperKit?.modelState ?? .unloaded
+                    }
+                    
+                    progress.completedUnitCount = 100
+                    continuation.yield(progress)
+                    continuation.finish()
+                                        
+                } catch {
+                    print("Error in loadModel: \(error.localizedDescription)")
+                    continuation.finish()
                     if let managerError = error as? WhisperManagerError {
                         throw managerError
                     } else {
