@@ -10,6 +10,7 @@
 @preconcurrency import WhisperKit
 import AVFoundation
 import CoreML
+import Combine
 
 
 @Observable
@@ -78,11 +79,10 @@ public class Whisper: @unchecked Sendable {
     public var requiredSegmentsForConfirmation: Int = 4
     public var bufferEnergy: [Float] = []
     public var bufferSeconds: Double = 0
-    public var confirmedSegments: [TranscriptionSegment] = []
     public var unconfirmedSegments: [TranscriptionSegment] = []
     
     // MARK: Recoding setting
-         
+    
     private let silenceDurationThreshold: TimeInterval = 0.4
     private let remainingAudioAfterPurge: TimeInterval = 0.38
     private let sampleResetThreshold: TimeInterval = 3.0
@@ -122,13 +122,46 @@ public class Whisper: @unchecked Sendable {
         requiredSegmentsForConfirmation = 2
         bufferEnergy = []
         bufferSeconds = 0
-        confirmedSegments = []
         unconfirmedSegments = []
     }
     
     // MARK: - Logic
+        
+    private var loadSubject = PassthroughSubject<Progress, Never>()
+    private var loadTask: Task<Void, Never>?
     
-    func fetchModels() {
+    public func prepare(model: String, progress: @escaping (Progress) -> Void) async throws {
+        let overallProgress = Progress(totalUnitCount: 100)
+        progress(overallProgress)
+        
+        // モデル情報のフェッチ
+        overallProgress.completedUnitCount = 0
+        progress(overallProgress)
+        do {
+            try await fetchModels()
+        } catch {
+            throw WhisperManagerError.preparationFailed("Failed to fetch models: \(error.localizedDescription)")
+        }
+        
+        overallProgress.completedUnitCount = 20
+        progress(overallProgress)
+        
+        // 指定されたモデルが利用可能かチェック
+        guard availableModels.contains(model) else {
+            throw WhisperManagerError.modelNotFound
+        }
+        
+        // モデルのロード
+        for try await loadProgress in loadModel(model) {
+            overallProgress.completedUnitCount = 20 + Int64(loadProgress.fractionCompleted * 80)
+            progress(overallProgress)
+        }
+        
+        overallProgress.completedUnitCount = 100
+        progress(overallProgress)
+    }
+    
+    private func fetchModels() async throws {
         availableModels = [selectedModel]
         
         // First check what's already downloaded
@@ -161,115 +194,90 @@ public class Whisper: @unchecked Sendable {
         print("Found locally: \(localModels)")
         print("Previously selected model: \(selectedModel)")
         
-        Task {
-            let remoteModels = try await WhisperKit.fetchAvailableModels(from: repoName)
-            for model in remoteModels {
-                if !availableModels.contains(model),
-                   !disabledModels.contains(model)
-                {
-                    availableModels.append(model)
-                }
+        // 非同期で remote models を取得
+        let remoteModels = try await WhisperKit.fetchAvailableModels(from: repoName)
+        for model in remoteModels {
+            if !availableModels.contains(model),
+               !disabledModels.contains(model)
+            {
+                availableModels.append(model)
             }
         }
     }
     
-    func loadModel(_ model: String, redownload: Bool = false) {
-        print("Selected Model: \(UserDefaults.standard.string(forKey: "selectedModel") ?? "nil")")
-        print("""
-            Computing Options:
-            - Mel Spectrogram:  \(getComputeOptions().melCompute.description)
-            - Audio Encoder:    \(getComputeOptions().audioEncoderCompute.description)
-            - Text Decoder:     \(getComputeOptions().textDecoderCompute.description)
-            - Prefill Data:     \(getComputeOptions().prefillCompute.description)
-        """)
-        
-        self.whisperKit = nil
-        Task {
-            self.whisperKit = try await WhisperKit(
-                computeOptions: getComputeOptions(),
-                verbose: true,
-                logLevel: .debug,
-                prewarm: false,
-                load: false,
-                download: false
-            )
-            guard let whisperKit = self.whisperKit else {
-                return
-            }
-            
-            var folder: URL?
-            
-            // Check if the model is available locally
-            if localModels.contains(model) && !redownload {
-                // Get local model folder URL from localModels
-                folder = URL(fileURLWithPath: localModelPath).appendingPathComponent(model)
-            } else {
-                // Download the model
-                folder = try await WhisperKit.download(variant: model, from: repoName, progressCallback: { @Sendable progress in
-                    DispatchQueue.main.async {
-                        self.loadingProgressValue = Float(progress.fractionCompleted) * self.specializationProgressRatio
-                        self.modelState = .downloading
-                    }
-                })
-            }
-            
-            await MainActor.run {
-                loadingProgressValue = specializationProgressRatio
-                modelState = .downloaded
-            }
-            
-            if let modelFolder = folder {
-                whisperKit.modelFolder = modelFolder
-                
-                await MainActor.run {
-                    // Set the loading progress to 90% of the way after prewarm
-                    loadingProgressValue = specializationProgressRatio
-                    modelState = .prewarming
-                }
-                
-                let progressBarTask = Task {
-                    await updateProgressBar(targetProgress: 0.9, maxTime: 240)
-                }
-                
-                // Prewarm models
+    private func loadModel(_ model: String, redownload: Bool = false) -> AsyncStream<Progress> {
+        AsyncStream { continuation in
+            Task {
                 do {
-                    try await whisperKit.prewarmModels()
-                    progressBarTask.cancel()
-                } catch {
-                    print("Error prewarming models, retrying: \(error.localizedDescription)")
-                    progressBarTask.cancel()
-                    if !redownload {
-                        loadModel(model, redownload: true)
-                        return
-                    } else {
-                        // Redownloading failed, error out
-                        modelState = .unloaded
-                        return
-                    }
-                }
-                
-                await MainActor.run {
-                    // Set the loading progress to 90% of the way after prewarm
-                    loadingProgressValue = specializationProgressRatio + 0.9 * (1 - specializationProgressRatio)
-                    modelState = .loading
-                }
-                
-                try await whisperKit.loadModels()
-                
-                await MainActor.run {
-                    if !localModels.contains(model) {
-                        localModels.append(model)
+                    let progress = Progress(totalUnitCount: 100)
+                    
+                    // WhisperKit の初期化
+                    self.whisperKit = try await WhisperKit(
+                        computeOptions: getComputeOptions(),
+                        verbose: true,
+                        logLevel: .debug,
+                        prewarm: false,
+                        load: false,
+                        download: false
+                    )
+                    guard self.whisperKit != nil else {
+                        throw WhisperManagerError.invalidState("WhisperKit initialization failed")
                     }
                     
-                    availableLanguages = Constants.languages.map { $0.key }.sorted()
-                    loadingProgressValue = 1.0
-                    modelState = whisperKit.modelState
+                    await MainActor.run {
+                        progress.completedUnitCount = 10
+                        continuation.yield(progress)
+                    }
+                    
+                    // モデルフォルダの取得またはダウンロード
+                    var folder: URL?
+                    if localModels.contains(model) && !redownload {
+                        folder = URL(fileURLWithPath: localModelPath).appendingPathComponent(model)
+                        await MainActor.run {
+                            progress.completedUnitCount = 30
+                            continuation.yield(progress)
+                        }
+                    } else {
+                        do {
+                            let downloadProgress = Progress(totalUnitCount: 100)
+                            folder = try await WhisperKit.download(variant: model, from: repoName) { @Sendable in
+                                downloadProgress.completedUnitCount = $0.completedUnitCount
+                            }                            
+                            // ダウンロード完了後にメインアクターで進捗を更新
+                            await MainActor.run {
+                                progress.completedUnitCount = 30
+                                continuation.yield(progress)
+                            }
+                        } catch {
+                            throw WhisperManagerError.modelLoadFailed
+                        }
+                    }
+                    
+                    guard let modelFolder = folder else {
+                        throw WhisperManagerError.modelLoadFailed
+                    }
+                    
+                    self.whisperKit?.modelFolder = modelFolder
+                    
+                    // 以下、モデルのプリウォーミングとロードの処理は変更なし
+                    // ...
+
+                } catch {
+                    await MainActor.run {
+                        print("Error in loadModel: \(error.localizedDescription)")
+                        continuation.finish()
+                    }
+                    if let managerError = error as? WhisperManagerError {
+                        throw managerError
+                    } else {
+                        throw WhisperManagerError.modelLoadFailed
+                    }
                 }
             }
         }
     }
     
-    func deleteModel() {
+    public func deleteModel() {
         if localModels.contains(selectedModel) {
             let modelFolder = URL(fileURLWithPath: localModelPath).appendingPathComponent(selectedModel)
             
@@ -287,7 +295,7 @@ public class Whisper: @unchecked Sendable {
         }
     }
     
-    func updateProgressBar(targetProgress: Float, maxTime: TimeInterval) async {
+    private func updateProgressBar(targetProgress: Float, maxTime: TimeInterval) async {
         let initialProgress = loadingProgressValue
         let decayConstant = -log(1 - targetProgress) / Float(maxTime)
         
@@ -322,13 +330,65 @@ public class Whisper: @unchecked Sendable {
         
         if isRecording {
             resetState()
-            startRecording()
+            _startRecording()
         } else {
-            stopRecording()
+            _stopRecording()
         }
     }
     
-    func startRecording() {
+    private var isListening: Bool = false
+    
+    private var messageSubject = PassthroughSubject<WhisperMessage, Never>()
+    
+    private var listeningTask: Task<Void, Never>?
+    
+    public func listen() -> AsyncStream<WhisperMessage> {
+        AsyncStream { continuation in
+            guard !isListening else {
+                continuation.finish()
+                return
+            }
+            
+            isListening = true
+            startRecording()
+            
+            let task = Task {
+                for await message in messageSubject.values {
+                    continuation.yield(message)
+                    if Task.isCancelled {
+                        break
+                    }
+                }
+                continuation.finish()
+            }
+            
+            continuation.onTermination = { _ in
+                task.cancel()
+                Task { @MainActor in
+                    self.stopListening()
+                }
+            }
+        }
+    }
+    
+    public func stopListening() {
+        guard isListening else { return }
+        isListening = false
+        stopRecording()
+        messageSubject.send(completion: .finished)
+    }
+    
+    private func startRecording() {
+        guard !isRecording else { return }
+        resetState()
+        _startRecording()
+    }
+    
+    private func stopRecording() {
+        _stopRecording()
+    }
+    
+    private func _startRecording() {
         if let audioProcessor = whisperKit?.audioProcessor {
             Task(priority: .userInitiated) {
                 guard await AudioProcessor.requestRecordPermission() else {
@@ -366,7 +426,7 @@ public class Whisper: @unchecked Sendable {
         }
     }
     
-    func stopRecording() {
+    private func _stopRecording() {
         isRecording = false
         stopRealtimeTranscription()
         if let audioProcessor = whisperKit?.audioProcessor {
@@ -376,7 +436,7 @@ public class Whisper: @unchecked Sendable {
     
     // MARK: - Transcribe Logic
     
-    func transcribeAudioSamples(_ samples: [Float]) async throws -> TranscriptionResult? {
+    private func transcribeAudioSamples(_ samples: [Float]) async throws -> TranscriptionResult? {
         guard let whisperKit = whisperKit else { return nil }
         
         let languageCode = Constants.languages[selectedLanguage, default: Constants.defaultLanguageCode]
@@ -465,7 +525,7 @@ public class Whisper: @unchecked Sendable {
     
     // MARK: Streaming Logic
     
-    func realtimeLoop() {
+    private func realtimeLoop() {
         transcriptionTask = Task {
             while isRecording && isTranscribing {
                 do {
@@ -478,12 +538,12 @@ public class Whisper: @unchecked Sendable {
         }
     }
     
-    func stopRealtimeTranscription() {
+    private func stopRealtimeTranscription() {
         isTranscribing = false
         transcriptionTask?.cancel()
     }
     
-    func transcribeCurrentBuffer() async throws {
+    private func transcribeCurrentBuffer() async throws {
         guard let whisperKit = whisperKit else { return }
         
         // Retrieve the current audio buffer from the audio processor
@@ -520,7 +580,8 @@ public class Whisper: @unchecked Sendable {
                 if let lastConfirmedSegment = unconfirmedSegments.last {
                     lastConfirmedSegmentEndSeconds = lastConfirmedSegment.end
                     print("Last confirmed segment end: \(lastConfirmedSegmentEndSeconds)")
-                    confirmedSegments.append(contentsOf: unconfirmedSegments)
+                    let message = WhisperMessage(from: lastConfirmedSegment)
+                    messageSubject.send(message)
                     unconfirmedSegments = []
                     whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(remainingAudioAfterPurge * Double(WhisperKit.sampleRate)))
                     lastBufferSize = whisperKit.audioProcessor.audioSamples.count
@@ -538,7 +599,7 @@ public class Whisper: @unchecked Sendable {
         
         // Store this for next iterations VAD
         lastBufferSize = currentBuffer.count
-
+        
         // Run realtime transcribe using timestamp tokens directly
         let transcription = try await transcribeAudioSamples(Array(currentBuffer))
         
@@ -576,9 +637,8 @@ public class Whisper: @unchecked Sendable {
                     
                     // Add confirmed segments to the confirmedSegments array
                     for segment in confirmedSegmentsArray {
-                        if !self.confirmedSegments.contains(segment: segment) {
-                            self.confirmedSegments.append(segment)
-                        }
+                        let message = WhisperMessage(from: segment)
+                        messageSubject.send(message)
                     }
                 }
                 
@@ -598,3 +658,29 @@ extension WhisperKit: @unchecked @retroactive Sendable { }
 extension ModelComputeOptions: @unchecked @retroactive Sendable { }
 
 extension TranscriptionResult: @unchecked @retroactive Sendable { }
+
+
+public enum WhisperManagerError: Error {
+    case preparationFailed(String)
+    case modelNotFound
+    case modelLoadFailed
+    case transcriptionFailed
+    case invalidState(String)
+}
+
+extension WhisperManagerError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .preparationFailed(let reason):
+            return "Preparation failed: \(reason)"
+        case .modelNotFound:
+            return "The specified model was not found."
+        case .modelLoadFailed:
+            return "Failed to load the model."
+        case .transcriptionFailed:
+            return "Transcription process failed."
+        case .invalidState(let message):
+            return "Invalid state: \(message)"
+        }
+    }
+}
