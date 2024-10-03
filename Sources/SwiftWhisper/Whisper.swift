@@ -16,6 +16,9 @@ import Combine
 @Observable
 @MainActor
 public class Whisper: @unchecked Sendable {
+    
+    public static let defaultModel: String = "openai_whisper-small"
+    
     var whisperKit: WhisperKit? = nil
 #if os(macOS)
     var audioDevices: [AudioDevice]? = nil
@@ -25,6 +28,7 @@ public class Whisper: @unchecked Sendable {
     var currentText: String = ""
     var currentChunks: [Int: (chunkText: [String], fallbacks: Int)] = [:]
     var modelStorage: String = "huggingface/models/argmaxinc/whisperkit-coreml"
+
     
     // MARK: Model management
     
@@ -127,7 +131,7 @@ public class Whisper: @unchecked Sendable {
     private var loadSubject = PassthroughSubject<Progress, Never>()
     private var loadTask: Task<Void, Never>?
     
-    public func prepare(model: String, progress: @escaping (Progress) -> Void) async throws {
+    public func prepare(model: String = Whisper.defaultModel, progress: @escaping (Progress) -> Void) async throws {
         let overallProgress = Progress(totalUnitCount: 100)
         progress(overallProgress)
         
