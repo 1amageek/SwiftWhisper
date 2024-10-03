@@ -21,7 +21,7 @@ public class Whisper: @unchecked Sendable {
     
     var whisperKit: WhisperKit? = nil
 #if os(macOS)
-    var audioDevices: [AudioDevice]? = nil
+    public var audioDevices: [AudioDevice]? = nil
 #endif
     var isRecording: Bool = false
     var isTranscribing: Bool = false
@@ -358,7 +358,7 @@ public class Whisper: @unchecked Sendable {
         }
     }
     
-    private var isListening: Bool = false
+    public private(set) var isListening: Bool = false
     
     private var messageSubject = PassthroughSubject<WhisperMessage, Never>()
     
