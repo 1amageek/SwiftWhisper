@@ -365,15 +365,9 @@ public class Whisper: @unchecked Sendable {
     private var listeningTask: Task<Void, Never>?
     
     public func listen() -> AsyncStream<WhisperMessage> {
-        AsyncStream { continuation in
-            guard !isListening else {
-                continuation.finish()
-                return
-            }
-            
-            isListening = true
-            startRecording()
-            
+        isListening = true
+        startRecording()
+        return AsyncStream { continuation in
             let task = Task {
                 for await message in messageSubject.values {
                     continuation.yield(message)
@@ -383,7 +377,6 @@ public class Whisper: @unchecked Sendable {
                 }
                 continuation.finish()
             }
-            
             continuation.onTermination = { _ in
                 task.cancel()
                 Task { @MainActor in
@@ -434,10 +427,10 @@ public class Whisper: @unchecked Sendable {
 #endif
                 do {
                     try audioProcessor.startRecordingLive(inputDeviceID: deviceId) { buffer in
-//                        Task { @MainActor in
-//                            self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
-//                            self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
-//                        }
+                        Task { @MainActor in
+                            self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
+                            self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
+                        }
                     }
                 } catch {
                     print("Error starting recording: \(error)")
