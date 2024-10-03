@@ -1,7 +1,6 @@
-
 # 🎙️ Whisper.swift
 
-Whisper.swift is a Swift class that utilizes WhisperKit for speech recognition and transcription. This class provides functionality for real-time audio input processing, model management, and transcription setting adjustments. ✨
+Whisper.swift is a Swift class that leverages WhisperKit for speech recognition and transcription. This class provides functionality for real-time audio input processing, model management, and transcription setting adjustments. ✨
 
 ## 🌟 Key Features
 
@@ -25,35 +24,37 @@ Whisper.swift is a Swift class that utilizes WhisperKit for speech recognition a
    let whisper = Whisper()
    ```
 
-2. **Loading a Model** 📥:
+2. **Preparing a Model** 📥:
    ```swift
-   whisper.loadModel("modelName")
+   try await whisper.prepare(model: "modelName") { progress in
+       print("Preparation progress: \(progress.fractionCompleted * 100)%")
+   }
    ```
 
-3. **Starting/Stopping Recording** ⏯️:
+3. **Listening and Transcribing** 🎧:
    ```swift
-   whisper.toggleRecording()
+   for try await message in whisper.listen() {
+       print(message.text)
+   }
    ```
 
-4. **Adjusting Settings** 🛠️:
+4. **Stopping Transcription** 🛑:
+   ```swift
+   whisper.stopListening()
+   ```
+
+5. **Adjusting Settings** 🛠️:
    ```swift
    whisper.selectedLanguage = "english"
-   whisper.enableTimestamps = true
-   ```
-
-5. **Retrieving Transcription Results** 📊:
-   ```swift
-   let currentText = whisper.currentText
    ```
 
 ## 🔑 Key Methods
 
+- `prepare(model:progress:)` 📥: Prepares the specified model with progress updates
+- `listen()` 🎙️: Starts listening and returns an AsyncStream of WhisperMessages
+- `stopListening()` 🛑: Stops the listening process
 - `fetchModels()` 🔍: Fetches available models
-- `loadModel(_:redownload:)` 📥: Loads a specified model
-- `startRecording()` 🎙️: Starts audio recording
-- `stopRecording()` 🛑: Stops audio recording
-- `transcribeAudioSamples(_:)` 🔄: Transcribes audio samples
-- `realtimeLoop()` 🔁: Initiates the real-time transcription loop
+- `deleteModel()` 🗑️: Deletes the selected model
 
 ## 📝 Notes
 
@@ -66,6 +67,7 @@ Whisper.swift is a Swift class that utilizes WhisperKit for speech recognition a
 - WhisperKit 🧠
 - AVFoundation 🎵
 - CoreML 🤖
+- Combine 🔗
 
 This class allows for easy integration of advanced speech recognition capabilities into your application. 🚀✨
 

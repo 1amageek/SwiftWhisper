@@ -45,9 +45,6 @@ public class Whisper: @unchecked Sendable {
         set { UserDefaults.standard.set(newValue, forKey: "selectedLanguage") }
     }
     public var repoName: String = "argmaxinc/whisperkit-coreml"
-    public var enableTimestamps: Bool = true
-    public var enablePromptPrefill: Bool = true
-    public var enableCachePrefill: Bool = true
     public var enableSpecialCharacters: Bool = false
     public var enableDecoderPreview: Bool = true
     public var temperatureStart: Double = 0
@@ -449,10 +446,10 @@ public class Whisper: @unchecked Sendable {
             temperature: Float(temperatureStart),
             temperatureFallbackCount: Int(fallbackCount),
             sampleLength: Int(sampleLength),
-            usePrefillPrompt: enablePromptPrefill,
-            usePrefillCache: enableCachePrefill,
+            usePrefillPrompt: true,
+            usePrefillCache: true,
             skipSpecialTokens: !enableSpecialCharacters,
-            withoutTimestamps: !enableTimestamps,
+            withoutTimestamps: true,
             wordTimestamps: true,
             clipTimestamps: seekClip,
             chunkingStrategy: .vad
