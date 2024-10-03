@@ -206,8 +206,8 @@ public class Whisper: @unchecked Sendable {
         }
     }
     
-    private func loadModel(_ model: String, redownload: Bool = false) -> AsyncStream<Progress> {
-        AsyncStream { continuation in
+    private func loadModel(_ model: String, redownload: Bool = false) -> AsyncThrowingStream<Progress, Error> {
+        AsyncThrowingStream { continuation in
             Task {
                 do {
                     let progress = Progress(totalUnitCount: 100)
@@ -224,29 +224,21 @@ public class Whisper: @unchecked Sendable {
                     guard self.whisperKit != nil else {
                         throw WhisperManagerError.invalidState("WhisperKit initialization failed")
                     }
-                    
-                    await MainActor.run {
-                        progress.completedUnitCount = 10
-                        continuation.yield(progress)
-                    }
+                    progress.completedUnitCount = 10
+                    continuation.yield(progress)
                     
                     // モデルフォルダの取得またはダウンロード
                     var folder: URL?
                     if localModels.contains(model) && !redownload {
                         folder = URL(fileURLWithPath: localModelPath).appendingPathComponent(model)
-                        await MainActor.run {
-                            progress.completedUnitCount = 30
-                            continuation.yield(progress)
-                        }
+                        progress.completedUnitCount = 30
+                        continuation.yield(progress)
                     } else {
                         do {
                             let downloadProgress = Progress(totalUnitCount: 100)
+                            progress.addChild(downloadProgress, withPendingUnitCount: downloadProgress.totalUnitCount)
                             folder = try await WhisperKit.download(variant: model, from: repoName) { @Sendable in
                                 downloadProgress.completedUnitCount = $0.completedUnitCount
-                            }
-                            // ダウンロード完了後にメインアクターで進捗を更新
-                            await MainActor.run {
-                                progress.completedUnitCount = 30
                                 continuation.yield(progress)
                             }
                         } catch {
@@ -268,7 +260,11 @@ public class Whisper: @unchecked Sendable {
                     progress.completedUnitCount = 40
                     continuation.yield(progress)
                     
-                    try await self.whisperKit?.prewarmModels()
+                    do {
+                        try await self.whisperKit?.prewarmModels()
+                    } catch {
+                        throw WhisperManagerError.modelLoadFailed
+                    }
                     
                     progress.completedUnitCount = 60
                     continuation.yield(progress)
@@ -292,14 +288,11 @@ public class Whisper: @unchecked Sendable {
                     progress.completedUnitCount = 100
                     continuation.yield(progress)
                     continuation.finish()
-                                        
                 } catch {
-                    print("Error in loadModel: \(error.localizedDescription)")
-                    continuation.finish()
                     if let managerError = error as? WhisperManagerError {
-                        throw managerError
+                        continuation.finish(throwing: managerError)
                     } else {
-                        throw WhisperManagerError.modelLoadFailed
+                        continuation.finish(throwing: WhisperManagerError.modelLoadFailed)
                     }
                 }
             }
