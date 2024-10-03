@@ -433,17 +433,19 @@ public class Whisper: @unchecked Sendable {
                 }
 #endif
                 
-                await MainActor.run {
-                    try? audioProcessor.startRecordingLive(inputDeviceID: deviceId) { _ in
+                try? audioProcessor.startRecordingLive(inputDeviceID: deviceId) { buffer in
+                    Task { @MainActor in
                         self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
                         self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
                     }
                 }
- 
+                
                 // Delay the timer start by 1 second
-                isRecording = true
-                isTranscribing = true
-                realtimeLoop()
+                await MainActor.run {
+                    self.isRecording = true
+                    self.isTranscribing = true
+                    self.realtimeLoop()
+                }
             }
         }
     }
