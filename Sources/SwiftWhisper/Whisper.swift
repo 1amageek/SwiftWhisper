@@ -211,8 +211,8 @@ public class Whisper: @unchecked Sendable {
                     // WhisperKit の初期化
                     self.whisperKit = try await WhisperKit(
                         computeOptions: getComputeOptions(),
-                        verbose: true,
-                        logLevel: .debug,
+                        verbose: false,
+                        logLevel: .none,
                         prewarm: false,
                         load: false,
                         download: false
