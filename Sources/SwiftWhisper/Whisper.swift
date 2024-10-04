@@ -28,6 +28,8 @@ public class Whisper: @unchecked Sendable {
 
     var modelStorage: String = "huggingface/models/argmaxinc/whisperkit-coreml"
     
+    public let shared: Whisper = .init()
+    
     
     // MARK: Model management
     
