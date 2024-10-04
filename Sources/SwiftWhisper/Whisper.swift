@@ -42,7 +42,7 @@ public class Whisper: @unchecked Sendable {
     
     // MARK: Settings
     
-    public var selectedAudioInput: String = "No Audio Input"
+    public var selectedAudioInput: String?
     public var selectedModel: String = WhisperKit.recommendedModels().default
     public var selectedTab: String = "Transcribe"
     public var selectedLanguage: String {
@@ -89,6 +89,19 @@ public class Whisper: @unchecked Sendable {
     
     private var loadSubject = PassthroughSubject<Progress, Never>()
     private var loadTask: Task<Void, Never>?
+    
+    public func setAudioDevice(_ audioDevice: AudioDevice? = nil) {
+#if os(macOS)
+        if let audioDevice {
+            self.selectedAudioInput = audioDevice.name
+        } else {
+            let audioDevices = AudioProcessor.getAudioDevices()
+            if let audioDevice = audioDevices.first {
+                self.selectedAudioInput = audioDevice.name
+            }
+        }
+#endif
+    }
     
     public func prepare(model: String = Whisper.defaultModel, progress: @escaping (Progress) -> Void) async throws {
         let overallProgress = Progress(totalUnitCount: 100)
@@ -372,14 +385,12 @@ public class Whisper: @unchecked Sendable {
                 
                 var deviceId: DeviceID?
 #if os(macOS)
-                if self.selectedAudioInput != "No Audio Input",
+                if let selectedAudioInput = self.selectedAudioInput,
                    let devices = self.audioDevices,
-                   let device = devices.first(where: { $0.name == selectedAudioInput })
-                {
+                   let device = devices.first(where: { $0.name == selectedAudioInput }) {
                     deviceId = device.id
                 }
-                
-                // There is no built-in microphone
+
                 if deviceId == nil {
                     throw WhisperError.microphoneUnavailable()
                 }
