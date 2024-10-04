@@ -18,6 +18,7 @@ struct ContentView: View {
         audioDevicesView
         .task {
             do {
+                whisper.setAudioDevice()
                 try await whisper.prepare { progress in
                     print(progress)
                 }

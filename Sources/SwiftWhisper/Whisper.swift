@@ -28,7 +28,7 @@ public class Whisper: @unchecked Sendable {
 
     var modelStorage: String = "huggingface/models/argmaxinc/whisperkit-coreml"
     
-    public static let shared: Whisper = .init()
+    public static let shared: Whisper = Whisper()
     
     
     // MARK: Model management
@@ -92,14 +92,15 @@ public class Whisper: @unchecked Sendable {
     
     public func setAudioDevice(_ audioDevice: AudioDevice? = nil) {
 #if os(macOS)
+        let audioDevices = AudioProcessor.getAudioDevices()
         if let audioDevice {
             self.selectedAudioInput = audioDevice.name
         } else {
-            let audioDevices = AudioProcessor.getAudioDevices()
             if let audioDevice = audioDevices.first {
                 self.selectedAudioInput = audioDevice.name
             }
         }
+        self.audioDevices = audioDevices
 #endif
     }
     
@@ -382,20 +383,18 @@ public class Whisper: @unchecked Sendable {
                     print("Microphone access was not granted.")
                     return
                 }
-                
                 var deviceId: DeviceID?
 #if os(macOS)
                 if let selectedAudioInput = self.selectedAudioInput,
                    let devices = self.audioDevices,
                    let device = devices.first(where: { $0.name == selectedAudioInput }) {
                     deviceId = device.id
-                }
+                }        
 
                 if deviceId == nil {
                     throw WhisperError.microphoneUnavailable()
                 }
 #endif
-                
                 await MainActor.run {
                     try? audioProcessor.startRecordingLive(inputDeviceID: deviceId, callback: nil)
                     self.isRecording = true
