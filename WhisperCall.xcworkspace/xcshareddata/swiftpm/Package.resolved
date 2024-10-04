@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/maiqingqiang/Jinja",
       "state" : {
-        "revision" : "4ffa95ce02e013c992287e19e3bbd620b6cc233a",
-        "version" : "1.0.4"
+        "revision" : "b435eb62b0d3d5f34167ec70a128355486981712",
+        "version" : "1.0.5"
       }
     },
     {
@@ -34,7 +34,7 @@
       "location" : "https://github.com/1amageek/WhisperKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "26083402ec3b6b0cab984af5e1b10b3e3443561d"
+        "revision" : "b8029fb0929bbe0cbf7dee1835603538d81f03ef"
       }
     }
   ],

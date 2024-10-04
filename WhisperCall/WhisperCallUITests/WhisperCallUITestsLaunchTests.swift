@@ -1,13 +1,13 @@
 //
-//  SwiftWhisperUITestsLaunchTests.swift
-//  SwiftWhisperUITests
+//  WhisperCallUITestsLaunchTests.swift
+//  WhisperCallUITests
 //
-//  Created by Norikazu Muramoto on 2024/10/03.
+//  Created by Norikazu Muramoto on 2024/10/04.
 //
 
 import XCTest
 
-final class SwiftWhisperUITestsLaunchTests: XCTestCase {
+final class WhisperCallUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

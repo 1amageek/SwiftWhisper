@@ -1,13 +1,13 @@
 //
-//  SwiftWhisperUITests.swift
-//  SwiftWhisperUITests
+//  WhisperCallUITests.swift
+//  WhisperCallUITests
 //
-//  Created by Norikazu Muramoto on 2024/10/03.
+//  Created by Norikazu Muramoto on 2024/10/04.
 //
 
 import XCTest
 
-final class SwiftWhisperUITests: XCTestCase {
+final class WhisperCallUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

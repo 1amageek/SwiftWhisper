@@ -1,14 +1,14 @@
 //
-//  SwiftWhisperTests.swift
-//  SwiftWhisperTests
+//  WhisperCallTests.swift
+//  WhisperCallTests
 //
-//  Created by Norikazu Muramoto on 2024/10/03.
+//  Created by Norikazu Muramoto on 2024/10/04.
 //
 
 import Testing
-@testable import SwiftWhisper
+@testable import WhisperCall
 
-struct SwiftWhisperTests {
+struct WhisperCallTests {
 
     @Test func example() async throws {
         // Write your test here and use APIs like `#expect(...)` to check expected conditions.

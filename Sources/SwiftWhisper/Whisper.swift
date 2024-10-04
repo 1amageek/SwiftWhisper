@@ -382,19 +382,9 @@ public class Whisper: @unchecked Sendable {
                     throw WhisperError.microphoneUnavailable()
                 }
 #endif
-                do {
-                    try audioProcessor.startRecordingLive(inputDeviceID: deviceId) { buffer in
-                        Task { @MainActor in
-                            self.bufferEnergy = self.whisperKit?.audioProcessor.relativeEnergy ?? []
-                            self.bufferSeconds = Double(self.whisperKit?.audioProcessor.audioSamples.count ?? 0) / Double(WhisperKit.sampleRate)
-                        }
-                    }
-                } catch {
-                    print("Error starting recording: \(error)")
-                }
                 
-                // Delay the timer start by 1 second
                 await MainActor.run {
+                    try? audioProcessor.startRecordingLive(inputDeviceID: deviceId, callback: nil)
                     self.isRecording = true
                     self.isTranscribing = true
                     self.realtimeLoop()
