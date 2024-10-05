@@ -93,14 +93,15 @@ public class Whisper: @unchecked Sendable {
     public func setAudioDevice(_ audioDevice: AudioDevice? = nil) {
 #if os(macOS)
         let audioDevices = AudioProcessor.getAudioDevices()
-        if let audioDevice {
-            self.selectedAudioInput = audioDevice.name
+        self.audioDevices = audioDevices
+        if let audioDevice,
+           let selectedDevice = audioDevices.first(where: { $0.name == selectedAudioInput }) {
+            self.selectedAudioInput = selectedDevice.name
         } else {
             if let audioDevice = audioDevices.first {
                 self.selectedAudioInput = audioDevice.name
             }
         }
-        self.audioDevices = audioDevices
 #endif
     }
     
