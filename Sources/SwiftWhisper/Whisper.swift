@@ -436,6 +436,7 @@ public class Whisper: @unchecked Sendable {
                     }
                 } catch {
                     print("Error: \(error.localizedDescription)")
+                    print(error)
                     break
                 }
             }
