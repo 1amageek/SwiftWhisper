@@ -33,14 +33,14 @@ actor RealtimeTranscriptionManager {
     }
     
     func transcribeCurrentBuffer() async throws -> WhisperMessage? {
-        let currentBuffer = whisperKit.audioProcessor.audioSamples
+        let currentBuffer = await whisperKit.audioProcessor.getAudioSamples()
         let nextBufferSize = currentBuffer.count - lastBufferSize
         let nextBufferSeconds = Float(nextBufferSize) / Float(WhisperKit.sampleRate)        
         guard nextBufferSeconds > 1.0 else {
             try await Task.sleep(nanoseconds: 100_000_000)
             return nil
         }
-        let relativeEnergy = whisperKit.audioProcessor.relativeEnergy
+        let relativeEnergy = await whisperKit.audioProcessor.getRelativeEnergy()
         let voiceDetected = AudioProcessor.isVoiceDetected(
             in: relativeEnergy,
             nextBufferInSeconds: nextBufferSeconds,
@@ -48,32 +48,35 @@ actor RealtimeTranscriptionManager {
         )
         
         if !voiceDetected {
-            return handleSilence(nextBufferSeconds: nextBufferSeconds)
+            return await handleSilence(nextBufferSeconds: nextBufferSeconds)
         }
         
         lastBufferSize = currentBuffer.count
         let transcription = try await transcribeAudioSamples(Array(currentBuffer))
-        return processTranscriptionResult(transcription)
+        return await processTranscriptionResult(transcription)
     }
     
-    private func handleSilence(nextBufferSeconds: Float) -> WhisperMessage? {
+    private func handleSilence(nextBufferSeconds: Float) async -> WhisperMessage? {
         if nextBufferSeconds > Float(settings.silenceDurationThreshold) {
-            return handleLongSilence(nextBufferSeconds: nextBufferSeconds)
+            return await handleLongSilence(nextBufferSeconds: nextBufferSeconds)
         }
         return nil
     }
     
-    private func handleLongSilence(nextBufferSeconds: Float) -> WhisperMessage? {
+    private func handleLongSilence(nextBufferSeconds: Float) async -> WhisperMessage? {
         if let lastConfirmedSegment = unconfirmedSegments.last {
             lastConfirmedSegmentEndSeconds = lastConfirmedSegment.end
             unconfirmedSegments = []
-            whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(settings.remainingAudioAfterPurge * Double(WhisperKit.sampleRate)))
-            lastBufferSize = whisperKit.audioProcessor.audioSamples.count
+            await whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(settings.remainingAudioAfterPurge * Double(WhisperKit.sampleRate)))
+            let audioSamples = await whisperKit.audioProcessor.getAudioSamples()
+            lastBufferSize = audioSamples.count
             return WhisperMessage(from: lastConfirmedSegment)
         } else if nextBufferSeconds > Float(settings.sampleResetThreshold) {
             unconfirmedSegments = []
             whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(settings.remainingAudioAfterReset * Double(WhisperKit.sampleRate)))
-            lastBufferSize = whisperKit.audioProcessor.audioSamples.count
+            await whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(settings.remainingAudioAfterPurge * Double(WhisperKit.sampleRate)))
+            let audioSamples = await whisperKit.audioProcessor.getAudioSamples()
+            lastBufferSize = audioSamples.count
             lastConfirmedSegmentEndSeconds = 0
         }
         return nil
@@ -129,7 +132,7 @@ actor RealtimeTranscriptionManager {
         return mergeTranscriptionResults(transcriptionResults)
     }
     
-    private func processTranscriptionResult(_ transcription: TranscriptionResult?) -> WhisperMessage? {
+    private func processTranscriptionResult(_ transcription: TranscriptionResult?) async -> WhisperMessage? {
         guard let segments = transcription?.segments else { return nil }
         
         if segments.count > settings.requiredSegmentsForConfirmation {
@@ -146,18 +149,18 @@ actor RealtimeTranscriptionManager {
         } else {
             unconfirmedSegments = segments
         }
-        updateTranscriptionStatistics(transcription)
+        await updateTranscriptionStatistics(transcription)
         return nil
     }
     
-    private func updateTranscriptionStatistics(_ transcription: TranscriptionResult?) {
+    private func updateTranscriptionStatistics(_ transcription: TranscriptionResult?) async {
         tokensPerSecond = transcription?.timings.tokensPerSecond ?? 0
         firstTokenTime = transcription?.timings.firstTokenTime ?? 0
         pipelineStart = transcription?.timings.pipelineStart ?? 0
         currentLag = transcription?.timings.decodingLoop ?? 0
         currentEncodingLoops += Int(transcription?.timings.totalEncodingRuns ?? 0)
-        
-        let totalAudio = Double(whisperKit.audioProcessor.audioSamples.count) / Double(WhisperKit.sampleRate)
+        let audioSamples = await whisperKit.audioProcessor.getAudioSamples()
+        let totalAudio = Double(audioSamples.count) / Double(WhisperKit.sampleRate)
         totalInferenceTime += transcription?.timings.fullPipeline ?? 0
         effectiveRealTimeFactor = Double(totalInferenceTime) / totalAudio
         effectiveSpeedFactor = totalAudio / Double(totalInferenceTime)
