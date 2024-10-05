@@ -103,13 +103,12 @@ actor RealtimeTranscriptionManager {
         let capturedLogProbThreshold = options.logProbThreshold!
         let capturedCompressionRatioThreshold = options.compressionRatioThreshold!
         
-        let decodingCallback: ((TranscriptionProgress) -> Bool?) = { [weak self] (progress: TranscriptionProgress) in
-            guard let self = self else { return nil }
+        let decodingCallback: ((TranscriptionProgress) -> Bool?) = { (progress: TranscriptionProgress) in
             let currentTokens = progress.tokens
             let checkWindow = Int(capturedCompressionCheckWindow)
             if currentTokens.count > checkWindow {
                 let checkTokens: [Int] = Array(currentTokens.suffix(checkWindow))
-                let compressionRatio = self.compressionRatio(of: checkTokens)
+                let compressionRatio = Self.compressionRatio(of: checkTokens)
                 if compressionRatio > capturedCompressionRatioThreshold {
                     Logging.debug("Early stopping due to compression threshold")
                     return false
@@ -164,7 +163,7 @@ actor RealtimeTranscriptionManager {
         effectiveSpeedFactor = totalAudio / Double(totalInferenceTime)
     }
     
-    nonisolated private func compressionRatio(of array: [Int]) -> Float {
+    nonisolated private static func compressionRatio(of array: [Int]) -> Float {
         let dataBuffer = array.compactMap { Int32($0) }
         let data = dataBuffer.withUnsafeBufferPointer { Data(buffer: $0) }
         

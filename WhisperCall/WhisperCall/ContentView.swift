@@ -19,9 +19,9 @@ struct ContentView: View {
         .task {
             do {
                 whisper.setAudioDevice()
-                whisper.setAnalyzer { buffer in
-                    print(buffer.map(\.magnitude))
-                }
+//                whisper.setAnalyzer { buffer in
+//                    print(buffer.map(\.magnitude))
+//                }
                 try await whisper.prepare { progress in
                     print(progress)
                 }
