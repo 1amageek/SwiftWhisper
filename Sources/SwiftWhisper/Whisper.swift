@@ -136,6 +136,14 @@ public class Whisper: @unchecked Sendable {
         progress(overallProgress)
     }
     
+    public typealias AudioBufferCallback = ([Float]) -> Void
+    
+    private var audioBufferCallback: AudioBufferCallback?
+    
+    public func setAnalyzer(_ callback: @escaping AudioBufferCallback) {
+        self.audioBufferCallback = callback
+    }
+    
     private func fetchModels() async throws {
         availableModels = [selectedModel]
         
@@ -397,7 +405,7 @@ public class Whisper: @unchecked Sendable {
                 }
 #endif
                 await MainActor.run {
-                    try? audioProcessor.startRecordingLive(inputDeviceID: deviceId, callback: nil)
+                    try? audioProcessor.startRecordingLive(inputDeviceID: deviceId, callback: audioBufferCallback)
                     self.isRecording = true
                     self.isTranscribing = true
                     self.realtimeLoop()

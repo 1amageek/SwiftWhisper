@@ -40,7 +40,7 @@ actor RealtimeTranscriptionManager {
             try await Task.sleep(nanoseconds: 100_000_000)
             return nil
         }
-        let relativeEnergy = await whisperKit.audioProcessor.relativeEnergy
+        let relativeEnergy = whisperKit.audioProcessor.relativeEnergy
         let voiceDetected = AudioProcessor.isVoiceDetected(
             in: relativeEnergy,
             nextBufferInSeconds: nextBufferSeconds,
@@ -52,7 +52,7 @@ actor RealtimeTranscriptionManager {
         }
         
         lastBufferSize = currentBuffer.count
-        let transcription = try await transcribeAudioSamples(Array(currentBuffer))        
+        let transcription = try await transcribeAudioSamples(Array(currentBuffer))
         return processTranscriptionResult(transcription)
     }
     

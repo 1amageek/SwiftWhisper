@@ -19,12 +19,14 @@ struct ContentView: View {
         .task {
             do {
                 whisper.setAudioDevice()
+                whisper.setAnalyzer { buffer in
+                    print(buffer.map(\.magnitude))
+                }
                 try await whisper.prepare { progress in
                     print(progress)
                 }
-                print("!!!----  ")
                 for await message in whisper.listen() {
-                    print(message)
+                    print(message.text)
                 }
             } catch {
                 print(error.localizedDescription)
