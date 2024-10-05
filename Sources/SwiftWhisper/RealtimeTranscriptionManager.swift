@@ -35,15 +35,14 @@ actor RealtimeTranscriptionManager {
     func transcribeCurrentBuffer() async throws -> WhisperMessage? {
         let currentBuffer = whisperKit.audioProcessor.audioSamples
         let nextBufferSize = currentBuffer.count - lastBufferSize
-        let nextBufferSeconds = Float(nextBufferSize) / Float(WhisperKit.sampleRate)
-        
+        let nextBufferSeconds = Float(nextBufferSize) / Float(WhisperKit.sampleRate)        
         guard nextBufferSeconds > 1.0 else {
             try await Task.sleep(nanoseconds: 100_000_000)
             return nil
         }
-        
+        let relativeEnergy = whisperKit.audioProcessor.relativeEnergy
         let voiceDetected = AudioProcessor.isVoiceDetected(
-            in: whisperKit.audioProcessor.relativeEnergy,
+            in: relativeEnergy,
             nextBufferInSeconds: nextBufferSeconds,
             silenceThreshold: Float(settings.silenceThreshold)
         )
