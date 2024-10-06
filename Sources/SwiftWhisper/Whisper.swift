@@ -387,6 +387,7 @@ public class Whisper: @unchecked Sendable {
     
     private func _startRecording() {
         if let audioProcessor = whisperKit?.audioProcessor {
+            let callback = self.audioBufferCallback
             Task(priority: .userInitiated) {
                 guard await AudioProcessor.requestRecordPermission() else {
                     print("Microphone access was not granted.")
@@ -404,8 +405,8 @@ public class Whisper: @unchecked Sendable {
                     throw WhisperError.microphoneUnavailable()
                 }
 #endif
+                try? await audioProcessor.startRecordingLive(inputDeviceID: deviceId, callback: callback)
                 await MainActor.run {
-                    try? audioProcessor.startRecordingLive(inputDeviceID: deviceId, callback: audioBufferCallback)
                     self.isRecording = true
                     self.isTranscribing = true
                     self.realtimeLoop()
@@ -418,7 +419,9 @@ public class Whisper: @unchecked Sendable {
         isRecording = false
         stopRealtimeTranscription()
         if let audioProcessor = whisperKit?.audioProcessor {
-            audioProcessor.stopRecording()
+            Task {
+                await audioProcessor.stopRecording()
+            }
         }
     }
         

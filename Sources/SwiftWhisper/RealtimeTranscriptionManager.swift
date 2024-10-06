@@ -73,7 +73,10 @@ actor RealtimeTranscriptionManager {
             return WhisperMessage(from: lastConfirmedSegment)
         } else if nextBufferSeconds > Float(settings.sampleResetThreshold) {
             unconfirmedSegments = []
-            whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(settings.remainingAudioAfterReset * Double(WhisperKit.sampleRate)))
+            await whisperKit.audioProcessor
+                .purgeAudioSamples(
+                    keepingLast: Int(settings.remainingAudioAfterReset * Double(WhisperKit.sampleRate))
+                )
             await whisperKit.audioProcessor.purgeAudioSamples(keepingLast: Int(settings.remainingAudioAfterPurge * Double(WhisperKit.sampleRate)))
             let audioSamples = await whisperKit.audioProcessor.getAudioSamples()
             lastBufferSize = audioSamples.count
